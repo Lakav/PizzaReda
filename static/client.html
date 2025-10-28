@@ -167,6 +167,23 @@
         </div>
     </div>
 
+    <!-- TOPPINGS MODAL -->
+    <div id="toppings-modal" class="modal hidden">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🍕 Ajouter des toppings à <span id="modal-pizza-name"></span></h2>
+                <button class="modal-close" onclick="closeToppingModal()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div id="toppings-modal-grid" class="toppings-grid"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" onclick="closeToppingModal()">Annuler</button>
+                <button type="button" class="btn btn-primary" onclick="confirmToppingSelection()">Ajouter les toppings</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Alerts -->
     <div id="alert-container"></div>
 

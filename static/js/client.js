@@ -5,6 +5,7 @@ let menu = [];
 let allToppings = [];
 let selectedPizzaIndex = null; // Index de la pizza actuellement sélectionnée
 let pizzasToppings = {}; // Objet pour tracker les toppings de chaque pizza {index: [topping1, topping2]}
+let currentToppingPizzaIndex = null; // Index de la pizza en cours de modification des toppings
 
 // DOM Elements
 const navBtns = document.querySelectorAll('.nav-btn');
@@ -105,9 +106,10 @@ function renderMenu() {
                     : ''}
             </div>
 
-            <div class="toppings-selector">
-                <div class="toppings-label">🍕 Ajouter des toppings (+1€ chacun):</div>
-                <div id="toppings-${pizzaIndex}" class="toppings-grid"></div>
+            <div class="pizza-actions">
+                <button type="button" class="btn btn-secondary btn-small" onclick="openToppingModal(${pizzaIndex})">
+                    🍕 Ajouter toppings
+                </button>
             </div>
 
             <div class="pizza-sizes">
@@ -124,33 +126,6 @@ function renderMenu() {
         `;
 
         menuContainer.appendChild(pizzaEl);
-
-        // Setup topping checkboxes for this pizza
-        const toppingContainer = pizzaEl.querySelector(`#toppings-${pizzaIndex}`);
-        allToppings.forEach(topping => {
-            const div = document.createElement('div');
-            div.className = 'topping-option';
-            div.innerHTML = `
-                <input type="checkbox" id="topping-${pizzaIndex}-${topping.name}"
-                       value="${topping.name}" data-price="${topping.price}"
-                       ${pizzasToppings[pizzaIndex].includes(topping.name) ? 'checked' : ''}>
-                <label for="topping-${pizzaIndex}-${topping.name}" style="margin: 0; cursor: pointer;">
-                    ${topping.name} (+${topping.price}€)
-                </label>
-            `;
-
-            div.addEventListener('click', () => {
-                const checkbox = div.querySelector('input[type="checkbox"]');
-                checkbox.checked = !checkbox.checked;
-                updatePizzaToppings(pizzaIndex);
-            });
-
-            div.querySelector('input').addEventListener('change', () => {
-                updatePizzaToppings(pizzaIndex);
-            });
-
-            toppingContainer.appendChild(div);
-        });
 
         // Setup size buttons
         const sizeButtons = pizzaEl.querySelectorAll('.size-btn');
@@ -437,4 +412,77 @@ function showAlert(message, type = 'info') {
     setTimeout(() => {
         alert.remove();
     }, 4000);
+}
+
+// Open topping modal for a specific pizza
+function openToppingModal(pizzaIndex) {
+    currentToppingPizzaIndex = pizzaIndex;
+    const pizza = menu[pizzaIndex];
+
+    // Set modal title
+    document.getElementById('modal-pizza-name').textContent = pizza.name;
+
+    // Populate toppings grid
+    const toppingGrid = document.getElementById('toppings-modal-grid');
+    toppingGrid.innerHTML = '';
+
+    allToppings.forEach(topping => {
+        const div = document.createElement('div');
+        div.className = 'topping-option';
+        div.innerHTML = `
+            <input type="checkbox" id="modal-topping-${topping.name}"
+                   value="${topping.name}" data-price="${topping.price}"
+                   ${pizzasToppings[pizzaIndex].includes(topping.name) ? 'checked' : ''}>
+            <label for="modal-topping-${topping.name}" style="margin: 0; cursor: pointer;">
+                ${topping.name} (+${topping.price}€)
+            </label>
+        `;
+
+        div.addEventListener('click', () => {
+            const checkbox = div.querySelector('input[type="checkbox"]');
+            checkbox.checked = !checkbox.checked;
+        });
+
+        toppingGrid.appendChild(div);
+    });
+
+    // Show modal
+    document.getElementById('toppings-modal').classList.remove('hidden');
+}
+
+// Close topping modal
+function closeToppingModal() {
+    document.getElementById('toppings-modal').classList.add('hidden');
+    currentToppingPizzaIndex = null;
+}
+
+// Confirm topping selection
+function confirmToppingSelection() {
+    if (currentToppingPizzaIndex === null) {
+        showAlert('Erreur: aucune pizza sélectionnée', 'error');
+        return;
+    }
+
+    // Get selected toppings from modal
+    const checked = Array.from(
+        document.querySelectorAll('#toppings-modal-grid input[type="checkbox"]:checked')
+    ).map(cb => cb.value);
+
+    // Update the pizza's toppings
+    pizzasToppings[currentToppingPizzaIndex] = checked;
+
+    // Update the pizza card's display
+    const selectedDisplay = document.getElementById(`selected-toppings-${currentToppingPizzaIndex}`);
+    if (checked.length > 0) {
+        selectedDisplay.innerHTML = `
+            <div class="toppings-label">✨ Toppings sélectionnés:</div>
+            <div class="toppings-chips">${checked.map(t => `<span class="chip">${t}</span>`).join('')}</div>
+        `;
+    } else {
+        selectedDisplay.innerHTML = '';
+    }
+
+    // Close modal and show success message
+    closeToppingModal();
+    showAlert(`✓ Toppings ajoutés à ${menu[currentToppingPizzaIndex].name}`, 'success');
 }
