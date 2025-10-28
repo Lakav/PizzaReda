@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from typing import List, Dict
-from models import Pizza, PizzaCreate, Order, OrderCreate, Price, Address
+from models import Pizza, PizzaCreate, Order, OrderCreate, Price, Address, InventoryManager, Topping
 from pydantic import ValidationError
 
 app = FastAPI(
@@ -13,6 +13,9 @@ app = FastAPI(
 orders_db: Dict[int, Order] = {}
 next_order_id = 1
 
+# Gestionnaire d'inventaire
+inventory = InventoryManager()
+
 
 @app.get("/")
 def read_root():
@@ -22,9 +25,14 @@ def read_root():
         "endpoints": {
             "GET /": "Cette page",
             "GET /pizzas/menu": "Voir le menu des pizzas disponibles",
+            "GET /ingredients/menu": "Voir tous les ingrédients disponibles avec leur stock",
             "POST /orders": "Créer une nouvelle commande",
             "GET /orders/{order_id}": "Voir les détails d'une commande",
             "GET /orders": "Voir toutes les commandes",
+            "DELETE /orders/{order_id}": "Annuler une commande",
+            "GET /inventory": "Voir l'état complet de l'inventaire",
+            "GET /inventory/ingredients": "Voir le stock de tous les ingrédients",
+            "POST /inventory/ingredients/{ingredient_name}/add": "Ajouter du stock d'un ingrédient",
             "GET /pricing/info": "Informations sur la tarification"
         }
     }
@@ -43,6 +51,12 @@ def get_menu() -> List[Pizza]:
     ]
     # Convertir en Pizza avec prix calculés
     return [Pizza.from_create(pizza) for pizza in menu_data]
+
+
+@app.get("/ingredients/menu")
+def get_ingredients_menu() -> List[Topping]:
+    """Retourne la liste de tous les ingrédients disponibles avec leur stock"""
+    return inventory.get_all_ingredients()
 
 
 @app.get("/pricing/info")
@@ -67,6 +81,11 @@ def create_order(order_create: OrderCreate) -> dict:
 
     L'adresse est VALIDÉE pour être une vraie adresse à Toulouse (code postal 31000).
 
+    GESTION DU STOCK:
+    - Vérifie que les pizzas et toppings demandés sont en stock
+    - Si rupture de stock, rejette la commande avec un code 409
+    - Sinon, décrémente le stock après confirmation
+
     Corps de la requête:
     - pizzas: Liste des pizzas à commander (SANS PRIX)
     - customer_name: Nom du client
@@ -86,6 +105,11 @@ def create_order(order_create: OrderCreate) -> dict:
     if not order_create.customer_name:
         raise HTTPException(status_code=400, detail="Le nom du client est obligatoire")
 
+    # Vérifier la disponibilité du stock AVANT de créer la commande
+    can_fulfill, error_message = inventory.can_fulfill_order(order_create.pizzas)
+    if not can_fulfill:
+        raise HTTPException(status_code=409, detail=f"Commande impossible: {error_message}")
+
     # Convertir les PizzaCreate en Pizza avec calcul automatique du prix
     pizzas_with_prices = [Pizza.from_create(pizza_create) for pizza_create in order_create.pizzas]
 
@@ -95,6 +119,9 @@ def create_order(order_create: OrderCreate) -> dict:
         customer_name=order_create.customer_name,
         customer_address=order_create.customer_address
     )
+
+    # Réduire l'inventaire après création de la commande
+    inventory.reduce_inventory(pizzas_with_prices)
 
     orders_db[next_order_id] = order
     next_order_id += 1
@@ -128,4 +155,44 @@ def cancel_order(order_id: int) -> dict:
     return {
         "message": f"Commande {order_id} annulée avec succès",
         "cancelled_order": order.get_summary()
+    }
+
+
+# ====================
+# GESTION DU STOCK DES INGRÉDIENTS
+# ====================
+
+@app.get("/inventory")
+def get_inventory() -> dict:
+    """Retourne l'état complet de l'inventaire des ingrédients"""
+    return inventory.get_inventory_summary()
+
+
+@app.get("/inventory/ingredients")
+def get_ingredients_inventory() -> List[Topping]:
+    """Retourne le stock actuel de tous les ingrédients"""
+    return inventory.get_all_ingredients()
+
+
+@app.post("/inventory/ingredients/{ingredient_name}/add")
+def add_ingredient_stock(ingredient_name: str, quantity: int) -> dict:
+    """
+    Ajoute du stock à un ingrédient
+
+    Query parameters:
+    - quantity: Quantité à ajouter (doit être positif)
+    """
+    if quantity <= 0:
+        raise HTTPException(status_code=400, detail="La quantité doit être positive")
+
+    success = inventory.add_ingredient_stock(ingredient_name, quantity)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Ingrédient '{ingredient_name}' non trouvé")
+
+    current_stock = inventory.get_ingredient_stock(ingredient_name)
+    return {
+        "message": f"Stock de {ingredient_name} augmenté de {quantity}",
+        "ingredient_name": ingredient_name,
+        "quantity_added": quantity,
+        "new_stock": current_stock
     }

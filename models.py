@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import List, Optional, Dict
 from pydantic import BaseModel, Field, model_validator, field_validator
 import requests
 from typing import Tuple
@@ -268,4 +268,119 @@ class Order(BaseModel):
             "delivery_fee": round(delivery_fee, 2),
             "is_delivery_free": delivery_fee == 0,
             "total": round(total, 2)
+        }
+
+
+# ====================
+# GESTION DU STOCK
+# ====================
+
+class Topping(BaseModel):
+    """Classe représentant un topping disponible avec son stock"""
+    name: str = Field(..., description="Nom du topping")
+    stock: int = Field(..., ge=0, description="Quantité en stock")
+
+    def __str__(self) -> str:
+        return f"{self.name} (stock: {self.stock})"
+
+
+class PizzaInventory(BaseModel):
+    """Classe représentant l'inventaire d'une pizza"""
+    name: str = Field(..., description="Nom de la pizza")
+    stock: int = Field(..., ge=0, description="Quantité en stock")
+
+    def __str__(self) -> str:
+        return f"{self.name} (stock: {self.stock})"
+
+
+class InventoryManager:
+    """Classe pour gérer l'inventaire des ingrédients (pas de stock par pizza)"""
+
+    # Liste de tous les ingrédients disponibles avec stock initial
+    AVAILABLE_INGREDIENTS = {
+        "pate": 200,  # La base de chaque pizza
+        "tomate": 100,
+        "mozzarella": 100,
+        "basilic": 80,
+        "jambon": 60,
+        "champignons": 50,
+        "gorgonzola": 40,
+        "chèvre": 45,
+        "emmental": 50,
+        "pepperoni": 70,
+        "poivrons": 60,
+        "oignons": 80,
+        "olives": 70,
+        "oeuf": 50,
+        "bacon": 55,
+        "poulet": 65,
+        "ananas": 40,
+    }
+
+    def __init__(self):
+        """Initialise l'inventaire des ingrédients"""
+        self.ingredients: Dict[str, int] = self.AVAILABLE_INGREDIENTS.copy()
+
+    def get_ingredient_stock(self, ingredient: str) -> int:
+        """Retourne le stock d'un ingrédient"""
+        return self.ingredients.get(ingredient.lower(), 0)
+
+    def is_ingredient_available(self, ingredient: str, quantity: int = 1) -> bool:
+        """Vérifie si un ingrédient est disponible en quantité suffisante"""
+        return self.get_ingredient_stock(ingredient) >= quantity
+
+    def can_fulfill_order(self, pizzas: List[PizzaCreate]) -> tuple[bool, Optional[str]]:
+        """
+        Vérifie si une commande peut être satisfaite en vérifiant les ingrédients
+        Retourne (can_fulfill, error_message)
+        """
+        for pizza in pizzas:
+            # Chaque pizza a besoin d'une pâte
+            if not self.is_ingredient_available("pate"):
+                return False, "La pâte est en rupture de stock"
+
+            # Vérifier les ingrédients de la pizza (tous les toppings = ingrédients)
+            for topping in pizza.toppings:
+                if not self.is_ingredient_available(topping):
+                    return False, f"L'ingrédient '{topping}' est en rupture de stock"
+
+        return True, None
+
+    def reduce_inventory(self, pizzas: List[Pizza]) -> None:
+        """
+        Réduit l'inventaire des ingrédients après une commande confirmée.
+        Chaque pizza consomme sa pâte et ses ingrédients.
+        """
+        for pizza in pizzas:
+            # Réduire la pâte (chaque pizza en consomme une)
+            if "pate" in self.ingredients:
+                self.ingredients["pate"] -= 1
+
+            # Réduire chaque ingrédient de la pizza
+            for ingredient in pizza.toppings:
+                ingredient_lower = ingredient.lower()
+                if ingredient_lower in self.ingredients:
+                    self.ingredients[ingredient_lower] -= 1
+
+    def add_ingredient_stock(self, ingredient_name: str, quantity: int) -> bool:
+        """Ajoute du stock à un ingrédient"""
+        ingredient_name_lower = ingredient_name.lower()
+        if ingredient_name_lower not in self.ingredients:
+            return False
+        self.ingredients[ingredient_name_lower] += quantity
+        return True
+
+    def get_all_ingredients(self) -> List[Topping]:
+        """Retourne la liste de tous les ingrédients disponibles"""
+        return [
+            Topping(name=name, stock=stock)
+            for name, stock in sorted(self.ingredients.items())
+        ]
+
+    def get_inventory_summary(self) -> dict:
+        """Retourne un résumé complet de l'inventaire"""
+        return {
+            "ingredients": {name: stock for name, stock in sorted(self.ingredients.items())},
+            "total_stock": sum(self.ingredients.values()),
+            "ingredients_count": len(self.ingredients),
         }

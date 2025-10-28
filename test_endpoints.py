@@ -83,7 +83,12 @@ class TestCreateOrder:
                 }
             ],
             "customer_name": "Jean Dupont",
-            "customer_address": "123 Rue de Paris"
+            "customer_address": {
+                "street_number": "22",
+                "street": "Rue Alsace-Lorraine",
+                "city": "Toulouse",
+                "postal_code": "31000"
+            }
         }
         response = client.post("/orders", json=order_data)
         assert response.status_code == 201
@@ -91,7 +96,7 @@ class TestCreateOrder:
 
         assert "order_id" in data
         assert data["customer_name"] == "Jean Dupont"
-        assert data["customer_address"] == "123 Rue de Paris"
+        assert "22 Rue Alsace-Lorraine" in data["customer_address"]
         assert data["subtotal"] == 8.0  # Prix auto Margherita
         assert data["delivery_fee"] == 5.0
         assert data["total"] == 13.0
@@ -118,7 +123,12 @@ class TestCreateOrder:
                 }
             ],
             "customer_name": "Marie Martin",
-            "customer_address": "456 Avenue des Pizzas"
+            "customer_address": {
+                "street_number": "8",
+                "street": "Allée Jean Jaurès",
+                "city": "Toulouse",
+                "postal_code": "31000"
+            }
         }
         response = client.post("/orders", json=order_data)
         assert response.status_code == 201
@@ -150,7 +160,12 @@ class TestCreateOrder:
                 }
             ],
             "customer_name": "Paul",
-            "customer_address": "789 Boulevard"
+            "customer_address": {
+                "street_number": "1",
+                "street": "Place du Capitole",
+                "city": "Toulouse",
+                "postal_code": "31000"
+            }
         }
         response = client.post("/orders", json=order_data)
         assert response.status_code == 201
@@ -165,7 +180,12 @@ class TestCreateOrder:
         order_data = {
             "pizzas": [],
             "customer_name": "Test",
-            "customer_address": "Test"
+            "customer_address": {
+                "street_number": "22",
+                "street": "Rue Alsace-Lorraine",
+                "city": "Toulouse",
+                "postal_code": "31000"
+            }
         }
         response = client.post("/orders", json=order_data)
         assert response.status_code == 400
@@ -176,32 +196,43 @@ class TestCreateOrder:
         order_data = {
             "pizzas": [
                 {
-                    "name": "Test",
+                    "name": "Margherita",
                     "size": "medium",
-                    "toppings": []
+                    "toppings": ["tomate", "mozzarella", "basilic"]
                 }
             ],
             "customer_name": "",
-            "customer_address": "123 Rue"
+            "customer_address": {
+                "street_number": "22",
+                "street": "Rue Alsace-Lorraine",
+                "city": "Toulouse",
+                "postal_code": "31000"
+            }
         }
         response = client.post("/orders", json=order_data)
         assert response.status_code == 400
 
     def test_create_order_missing_address(self):
-        """Test qu'on ne peut pas créer une commande sans adresse"""
+        """Test qu'on ne peut pas créer une commande avec adresse invalide"""
         order_data = {
             "pizzas": [
                 {
-                    "name": "Test",
+                    "name": "Margherita",
                     "size": "medium",
-                    "toppings": []
+                    "toppings": ["tomate", "mozzarella", "basilic"]
                 }
             ],
             "customer_name": "Jean",
-            "customer_address": ""
+            "customer_address": {
+                "street_number": "999",
+                "street": "Rue qui n'existe pas",
+                "city": "Toulouse",
+                "postal_code": "31000"
+            }
         }
         response = client.post("/orders", json=order_data)
-        assert response.status_code == 400
+        # Devrait être rejeté car l'adresse n'existe pas
+        assert response.status_code == 422
 
     def test_create_order_below_threshold(self):
         """Test d'une commande en dessous du seuil de livraison gratuite"""
@@ -214,7 +245,12 @@ class TestCreateOrder:
                 }
             ],
             "customer_name": "Test",
-            "customer_address": "Test"
+            "customer_address": {
+                "street_number": "22",
+                "street": "Rue Alsace-Lorraine",
+                "city": "Toulouse",
+                "postal_code": "31000"
+            }
         }
         response = client.post("/orders", json=order_data)
         assert response.status_code == 201
@@ -245,7 +281,12 @@ class TestCreateOrder:
                 }
             ],
             "customer_name": "Test",
-            "customer_address": "Test"
+            "customer_address": {
+                "street_number": "22",
+                "street": "Rue Alsace-Lorraine",
+                "city": "Toulouse",
+                "postal_code": "31000"
+            }
         }
         response = client.post("/orders", json=order_data)
         assert response.status_code == 201
@@ -266,13 +307,18 @@ class TestGetOrder:
         order_data = {
             "pizzas": [
                 {
-                    "name": "Test",
+                    "name": "Margherita",
                     "size": "medium",
-                    "toppings": []
+                    "toppings": ["tomate", "mozzarella", "basilic"]
                 }
             ],
             "customer_name": "Test",
-            "customer_address": "Test"
+            "customer_address": {
+                "street_number": "22",
+                "street": "Rue Alsace-Lorraine",
+                "city": "Toulouse",
+                "postal_code": "31000"
+            }
         }
         create_response = client.post("/orders", json=order_data)
         order_id = create_response.json()["order_id"]
@@ -304,13 +350,18 @@ class TestGetAllOrders:
     def test_get_all_orders_multiple(self):
         """Test de récupération de plusieurs commandes"""
         # Créer plusieurs commandes
+        addresses = [
+            {"street_number": "22", "street": "Rue Alsace-Lorraine", "city": "Toulouse", "postal_code": "31000"},
+            {"street_number": "8", "street": "Allée Jean Jaurès", "city": "Toulouse", "postal_code": "31000"},
+            {"street_number": "1", "street": "Place du Capitole", "city": "Toulouse", "postal_code": "31000"}
+        ]
         for i in range(3):
             order_data = {
                 "pizzas": [
                     {"name": "Margherita", "size": "medium", "toppings": ["tomate", "mozzarella", "basilic"]}
                 ],
                 "customer_name": f"Client{i}",
-                "customer_address": f"Adresse{i}"
+                "customer_address": addresses[i]
             }
             client.post("/orders", json=order_data)
 
@@ -330,13 +381,18 @@ class TestCancelOrder:
         order_data = {
             "pizzas": [
                 {
-                    "name": "Test",
+                    "name": "Margherita",
                     "size": "medium",
-                    "toppings": []
+                    "toppings": ["tomate", "mozzarella", "basilic"]
                 }
             ],
             "customer_name": "Test",
-            "customer_address": "Test"
+            "customer_address": {
+                "street_number": "22",
+                "street": "Rue Alsace-Lorraine",
+                "city": "Toulouse",
+                "postal_code": "31000"
+            }
         }
         create_response = client.post("/orders", json=order_data)
         order_id = create_response.json()["order_id"]
@@ -374,16 +430,21 @@ class TestIntegration:
                 {
                     "name": "Margherita",
                     "size": "medium",
-                    "toppings": ["tomate"]
+                    "toppings": ["tomate", "mozzarella", "basilic"]
                 },
                 {
                     "name": "Reine",
                     "size": "medium",
-                    "toppings": ["jambon"]
+                    "toppings": ["tomate", "mozzarella", "jambon", "champignons"]
                 }
             ],
             "customer_name": "Integration Test",
-            "customer_address": "123 Test Street"
+            "customer_address": {
+                "street_number": "22",
+                "street": "Rue Alsace-Lorraine",
+                "city": "Toulouse",
+                "postal_code": "31000"
+            }
         }
         create_response = client.post("/orders", json=order_data)
         assert create_response.status_code == 201
@@ -418,7 +479,12 @@ class TestIntegration:
                     "toppings": ["tomate", "mozzarella", "basilic"]
                 }],
             "customer_name": "Client1",
-            "customer_address": "Adresse1"
+            "customer_address": {
+                "street_number": "22",
+                "street": "Rue Alsace-Lorraine",
+                "city": "Toulouse",
+                "postal_code": "31000"
+            }
         }
         response1 = client.post("/orders", json=order1)
         assert response1.json()["delivery_fee"] == 5.0
@@ -444,7 +510,12 @@ class TestIntegration:
                 }
             ],
             "customer_name": "Client2",
-            "customer_address": "Adresse2"
+            "customer_address": {
+                "street_number": "8",
+                "street": "Allée Jean Jaurès",
+                "city": "Toulouse",
+                "postal_code": "31000"
+            }
         }
         response2 = client.post("/orders", json=order2)
         assert response2.json()["delivery_fee"] == 0.0
