@@ -50,10 +50,19 @@ class TestMenuEndpoint:
         menu = response.json()
         for pizza in menu:
             assert "name" in pizza
-            assert "size" in pizza
-            assert "price" in pizza
-            assert "toppings" in pizza
-            assert pizza["price"] > 0
+            assert "base_toppings" in pizza
+            assert "prices" in pizza
+            # Vérifier les 3 tailles
+            assert "small" in pizza["prices"]
+            assert "medium" in pizza["prices"]
+            assert "large" in pizza["prices"]
+            # Vérifier que les prix sont positifs et cohérents
+            assert pizza["prices"]["small"] > 0
+            assert pizza["prices"]["medium"] > 0
+            assert pizza["prices"]["large"] > 0
+            # small < medium < large
+            assert pizza["prices"]["small"] < pizza["prices"]["medium"]
+            assert pizza["prices"]["medium"] < pizza["prices"]["large"]
 
 
 class TestPricingEndpoint:
@@ -97,6 +106,12 @@ class TestCreateOrder:
         assert "order_id" in data
         assert data["customer_name"] == "Jean Dupont"
         assert "22 Rue Alsace-Lorraine" in data["customer_address"]
+        assert len(data["pizzas"]) == 1
+        # Vérifier la structure de la pizza
+        pizza = data["pizzas"][0]
+        assert pizza["name"] == "Margherita"
+        assert pizza["size"] == "medium"
+        assert pizza["toppings"] == ["tomate", "mozzarella", "basilic"]
         assert data["subtotal"] == 8.0  # Prix auto Margherita
         assert data["delivery_fee"] == 5.0
         assert data["total"] == 13.0
@@ -211,6 +226,29 @@ class TestCreateOrder:
         }
         response = client.post("/orders", json=order_data)
         assert response.status_code == 400
+
+    def test_create_order_invalid_size(self):
+        """Test qu'une commande avec une taille invalide est rejetée"""
+        order_data = {
+            "pizzas": [
+                {
+                    "name": "Margherita",
+                    "size": "xlarge",  # Taille invalide
+                    "toppings": ["tomate", "mozzarella", "basilic"]
+                }
+            ],
+            "customer_name": "Test",
+            "customer_address": {
+                "street_number": "22",
+                "street": "Rue Alsace-Lorraine",
+                "city": "Toulouse",
+                "postal_code": "31000"
+            }
+        }
+        response = client.post("/orders", json=order_data)
+        assert response.status_code == 422
+        assert "small, medium, large" in response.json()["detail"][0]["msg"].lower() or \
+               "small, medium, large" in str(response.json())
 
     def test_create_order_missing_address(self):
         """Test qu'on ne peut pas créer une commande avec adresse invalide"""

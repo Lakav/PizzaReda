@@ -28,8 +28,25 @@ class Price:
         "large": 1.3,
     }
 
-    # Prix par topping supplémentaire
-    TOPPING_PRICE = 1.0
+    # Prix adaptés pour chaque topping (supplémentaire)
+    TOPPING_PRICES = {
+        "tomate": 0.5,
+        "mozzarella": 0.8,
+        "basilic": 0.3,
+        "jambon": 1.2,
+        "champignons": 0.7,
+        "gorgonzola": 1.5,
+        "chèvre": 1.3,
+        "emmental": 1.0,
+        "pepperoni": 1.5,
+        "poivrons": 0.6,
+        "oignons": 0.4,
+        "olives": 0.9,
+        "oeuf": 0.8,
+        "bacon": 1.4,
+        "poulet": 2.0,
+        "ananas": 1.2,
+    }
 
     # Toppings de base inclus par pizza
     BASE_TOPPINGS = {
@@ -62,11 +79,17 @@ class Price:
         # Toppings de base pour cette pizza
         base_toppings = Price.BASE_TOPPINGS.get(name_lower, [])
 
-        # Compter les toppings supplémentaires
-        extra_toppings = len([t for t in toppings if t.lower() not in [bt.lower() for bt in base_toppings]])
+        # Calculer le prix des toppings supplémentaires avec prix adaptés
+        extra_toppings_price = 0.0
+        for topping in toppings:
+            topping_lower = topping.lower()
+            # Si le topping n'est pas dans les toppings de base, le compter comme supplémentaire
+            if topping_lower not in [bt.lower() for bt in base_toppings]:
+                # Utiliser le prix du topping s'il existe, sinon 1€ par défaut
+                extra_toppings_price += Price.TOPPING_PRICES.get(topping_lower, 1.0)
 
         # Prix final
-        final_price = price_with_size + (extra_toppings * Price.TOPPING_PRICE)
+        final_price = price_with_size + extra_toppings_price
 
         return round(final_price, 2)
 
@@ -198,9 +221,18 @@ class PizzaCreate(BaseModel):
     size: str = Field(..., description="Taille: small, medium, large")
     toppings: List[str] = Field(default_factory=list, description="Liste des garnitures")
 
+    @field_validator("size")
+    @classmethod
+    def validate_size(cls, v: str) -> str:
+        """Valide que la taille est small, medium ou large"""
+        valid_sizes = ["small", "medium", "large"]
+        if v.lower() not in valid_sizes:
+            raise ValueError(f"La taille doit être: {', '.join(valid_sizes)}")
+        return v.lower()
+
 
 class Pizza(BaseModel):
-    """Classe représentant une pizza avec son prix"""
+    """Classe représentant une pizza commandée avec son prix et ses toppings"""
     name: str = Field(..., description="Nom de la pizza")
     size: str = Field(..., description="Taille: small, medium, large")
     toppings: List[str] = Field(default_factory=list, description="Liste des garnitures")
@@ -223,6 +255,16 @@ class Pizza(BaseModel):
 
     def __str__(self):
         return f"{self.name} ({self.size}) - {self.price}€"
+
+
+class PizzaMenuPrice(BaseModel):
+    """Classe pour afficher les prix d'une pizza pour chaque taille"""
+    name: str = Field(..., description="Nom de la pizza")
+    base_toppings: List[str] = Field(..., description="Toppings inclus de base")
+    prices: dict = Field(..., description="Prix par taille: {'small': X, 'medium': Y, 'large': Z}")
+
+    def __str__(self):
+        return f"{self.name}: small={self.prices['small']}€, medium={self.prices['medium']}€, large={self.prices['large']}€"
 
 
 class OrderCreate(BaseModel):
@@ -254,16 +296,26 @@ class Order(BaseModel):
         return Price.calculate_total(subtotal)
 
     def get_summary(self) -> dict:
-        """Retourne un résumé de la commande"""
+        """Retourne un résumé de la commande avec détail des pizzas et toppings"""
         subtotal = self.calculate_subtotal()
         delivery_fee = self.calculate_delivery_fee()
         total = self.calculate_total()
+
+        # Formater les pizzas avec détails
+        pizzas_detail = []
+        for pizza in self.pizzas:
+            pizzas_detail.append({
+                "name": pizza.name,
+                "size": pizza.size,
+                "toppings": pizza.toppings,
+                "price": round(pizza.price, 2)
+            })
 
         return {
             "order_id": self.order_id,
             "customer_name": self.customer_name,
             "customer_address": str(self.customer_address),
-            "pizzas": [str(pizza) for pizza in self.pizzas],
+            "pizzas": pizzas_detail,
             "subtotal": round(subtotal, 2),
             "delivery_fee": round(delivery_fee, 2),
             "is_delivery_free": delivery_fee == 0,

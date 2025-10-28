@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from typing import List, Dict
-from models import Pizza, PizzaCreate, Order, OrderCreate, Price, Address, InventoryManager, Topping, Ingredient
+from models import Pizza, PizzaCreate, Order, OrderCreate, Price, Address, InventoryManager, Topping, Ingredient, PizzaMenuPrice
 from pydantic import ValidationError
 
 app = FastAPI(
@@ -38,18 +38,37 @@ def read_root():
 
 
 @app.get("/pizzas/menu")
-def get_menu() -> List[Pizza]:
-    """Retourne le menu des pizzas disponibles avec prix calculés automatiquement"""
+def get_menu() -> List[PizzaMenuPrice]:
+    """
+    Retourne le menu des pizzas disponibles avec les prix pour chaque taille.
+
+    Chaque pizza affiche:
+    - Son nom
+    - Les toppings inclus de base
+    - Les prix pour small, medium et large
+    """
     menu_data = [
-        PizzaCreate(name="Margherita", size="medium", toppings=["tomate", "mozzarella", "basilic"]),
-        PizzaCreate(name="Reine", size="medium", toppings=["tomate", "mozzarella", "jambon", "champignons"]),
-        PizzaCreate(name="4 Fromages", size="medium", toppings=["mozzarella", "gorgonzola", "chèvre", "emmental"]),
-        PizzaCreate(name="Calzone", size="large", toppings=["tomate", "mozzarella", "jambon", "oeuf"]),
-        PizzaCreate(name="Végétarienne", size="medium", toppings=["tomate", "mozzarella", "poivrons", "oignons", "olives"]),
-        PizzaCreate(name="Pepperoni", size="medium", toppings=["tomate", "mozzarella", "pepperoni"]),
+        ("Margherita", ["tomate", "mozzarella", "basilic"]),
+        ("Reine", ["tomate", "mozzarella", "jambon", "champignons"]),
+        ("4 Fromages", ["mozzarella", "gorgonzola", "chèvre", "emmental"]),
+        ("Calzone", ["tomate", "mozzarella", "jambon", "oeuf"]),
+        ("Végétarienne", ["tomate", "mozzarella", "poivrons", "oignons", "olives"]),
+        ("Pepperoni", ["tomate", "mozzarella", "pepperoni"]),
     ]
-    # Convertir en Pizza avec prix calculés
-    return [Pizza.from_create(pizza) for pizza in menu_data]
+
+    result = []
+    for pizza_name, toppings in menu_data:
+        prices = {}
+        for size in ["small", "medium", "large"]:
+            prices[size] = Price.calculate_pizza_price(pizza_name, size, toppings)
+
+        result.append(PizzaMenuPrice(
+            name=pizza_name,
+            base_toppings=toppings,
+            prices=prices
+        ))
+
+    return result
 
 
 @app.get("/topping/menu")
