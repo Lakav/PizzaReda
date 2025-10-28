@@ -121,19 +121,23 @@ Retourne les informations sur les frais de livraison.
 ```
 POST /orders
 ```
-Body :
+Body (ATTENTION: le "price" est calculé automatiquement, ne pas l'envoyer) :
 ```json
 {
   "pizzas": [
     {
       "name": "Margherita",
       "size": "medium",
-      "price": 10.0,
       "toppings": ["tomate", "mozzarella", "basilic"]
     }
   ],
   "customer_name": "Jean Dupont",
-  "customer_address": "15 Place du Capitole, 31000 Toulouse"
+  "customer_address": {
+    "street_number": "15",
+    "street": "Place du Capitole",
+    "city": "Toulouse",
+    "postal_code": "31000"
+  }
 }
 ```
 
@@ -163,12 +167,16 @@ curl -X POST "http://localhost:8000/orders" \
       {
         "name": "Margherita",
         "size": "medium",
-        "price": 10.0,
         "toppings": ["tomate", "mozzarella"]
       }
     ],
     "customer_name": "Jean Dupont",
-    "customer_address": "22 Rue Alsace Lorraine, 31000 Toulouse"
+    "customer_address": {
+      "street_number": "22",
+      "street": "Rue Alsace-Lorraine",
+      "city": "Toulouse",
+      "postal_code": "31000"
+    }
   }'
 ```
 
@@ -177,12 +185,25 @@ Réponse :
 {
   "order_id": 1,
   "customer_name": "Jean Dupont",
-  "customer_address": "22 Rue Alsace Lorraine, 31000 Toulouse",
-  "pizzas": ["Margherita (medium) - 10.0€"],
+  "customer_address": "22 Rue Alsace-Lorraine, 31000 Toulouse",
+  "pizzas": [
+    {
+      "name": "Margherita",
+      "size": "medium",
+      "toppings": ["tomate", "mozzarella"],
+      "price": 10.0
+    }
+  ],
   "subtotal": 10.0,
   "delivery_fee": 5.0,
   "is_delivery_free": false,
-  "total": 15.0
+  "total": 15.0,
+  "status": "pending",
+  "created_at": "2025-10-28T14:30:00.000000",
+  "started_at": null,
+  "ready_at": null,
+  "delivered_at": null,
+  "estimated_delivery_minutes": 27
 }
 ```
 
@@ -195,24 +216,26 @@ curl -X POST "http://localhost:8000/orders" \
       {
         "name": "Margherita",
         "size": "medium",
-        "price": 10.0,
         "toppings": ["tomate", "mozzarella"]
       },
       {
         "name": "Reine",
         "size": "medium",
-        "price": 12.0,
         "toppings": ["tomate", "mozzarella", "jambon"]
       },
       {
         "name": "4 Fromages",
         "size": "medium",
-        "price": 13.0,
         "toppings": ["mozzarella", "gorgonzola"]
       }
     ],
     "customer_name": "Marie Martin",
-    "customer_address": "8 Allée Jean Jaurès, 31000 Toulouse"
+    "customer_address": {
+      "street_number": "8",
+      "street": "Allée Jean Jaurès",
+      "city": "Toulouse",
+      "postal_code": "31000"
+    }
   }'
 ```
 
@@ -223,14 +246,35 @@ Réponse :
   "customer_name": "Marie Martin",
   "customer_address": "8 Allée Jean Jaurès, 31000 Toulouse",
   "pizzas": [
-    "Margherita (medium) - 10.0€",
-    "Reine (medium) - 12.0€",
-    "4 Fromages (medium) - 13.0€"
+    {
+      "name": "Margherita",
+      "size": "medium",
+      "toppings": ["tomate", "mozzarella"],
+      "price": 10.0
+    },
+    {
+      "name": "Reine",
+      "size": "medium",
+      "toppings": ["tomate", "mozzarella", "jambon"],
+      "price": 12.0
+    },
+    {
+      "name": "4 Fromages",
+      "size": "medium",
+      "toppings": ["mozzarella", "gorgonzola"],
+      "price": 13.0
+    }
   ],
   "subtotal": 35.0,
   "delivery_fee": 0.0,
   "is_delivery_free": true,
-  "total": 35.0
+  "total": 35.0,
+  "status": "pending",
+  "created_at": "2025-10-28T14:35:00.000000",
+  "started_at": null,
+  "ready_at": null,
+  "delivered_at": null,
+  "estimated_delivery_minutes": 22
 }
 ```
 

@@ -209,7 +209,8 @@ class Address(BaseModel):
 
                 # Vérifier que la rue est dans le résultat
                 # (on utilise startswith car Nominatim peut ajouter des caractères comme d'Alsace-Lorraine)
-                street_name = self.street.split()[0].lower()  # Premier mot du nom de rue
+                street_words = self.street.split()
+                street_name = street_words[0].lower() if street_words else self.street.lower()  # Premier mot ou street entier
                 if street_name in display_name or street_lower in display_name or \
                    display_name.find(street_name) != -1:
                     # Accepter ce résultat si c'est clairement une adresse
@@ -345,8 +346,9 @@ class Order(BaseModel):
         """Retourne le temps estimé de livraison en minutes (simulation)"""
         # Temps de préparation: 15-20 minutes (simule une valeur basée sur l'ID)
         prep_time = 15 + (self.order_id % 6)
-        # Temps de livraison: basé sur la rue (5-15 minutes en simulation)
-        delivery_time = 5 + (hash(self.customer_address.street) % 11)
+        # Temps de livraison: basé sur l'adresse (5-15 minutes) - déterministe via sum() des caractères
+        street_hash = sum(ord(c) for c in self.customer_address.street) % 11
+        delivery_time = 5 + street_hash
         return prep_time + delivery_time
 
     def get_summary(self) -> dict:
@@ -475,6 +477,22 @@ class InventoryManager:
                 ingredient_lower = ingredient.lower()
                 if ingredient_lower in self.ingredients:
                     self.ingredients[ingredient_lower] -= 1
+
+    def restore_inventory(self, pizzas: List[Pizza]) -> None:
+        """
+        Restaure l'inventaire des ingrédients quand une commande est annulée.
+        Opération inverse de reduce_inventory().
+        """
+        for pizza in pizzas:
+            # Restaurer la pâte
+            if "pate" in self.ingredients:
+                self.ingredients["pate"] += 1
+
+            # Restaurer chaque ingrédient de la pizza
+            for ingredient in pizza.toppings:
+                ingredient_lower = ingredient.lower()
+                if ingredient_lower in self.ingredients:
+                    self.ingredients[ingredient_lower] += 1
 
     def add_ingredient_stock(self, ingredient_name: str, quantity: int) -> bool:
         """Ajoute du stock à un ingrédient"""

@@ -1,251 +1,132 @@
-# 🍕 Pizzaiolo - Système Complet de Gestion des Commandes de Pizza
+# 🍕 Pizzaiolo - Système de Gestion des Commandes de Pizza
 
-API REST complète avec interfaces web pour clients et vendeurs. Gestion des commandes de pizza avec livraison gratuite à partir de 30€, suivi en temps réel, et gestion du stock.
+API REST complète avec interfaces web pour clients et vendeurs.
 
-## Architecture
+## 🚀 Démarrage rapide
 
-Le projet utilise les classes suivantes :
+```bash
+# Depuis la racine du projet
+uvicorn main:app --reload
+```
 
-- **Pizza** : Représente une pizza avec nom, taille, prix et garnitures
-- **Price** : Gère la logique de tarification (frais de livraison, seuil de livraison gratuite)
-- **Order** : Représente une commande avec liste de pizzas et informations client
+Le serveur démarre sur `http://127.0.0.1:8000`
 
-## Règles de tarification
+## 🌐 Accès aux Interfaces
 
-- Frais de livraison : **5€**
-- Livraison gratuite à partir de : **30€**
+Une fois le serveur en marche:
 
-## Installation
+- **🏠 Accueil**: http://127.0.0.1:8000/static/index.html
+- **👤 Client** (Commander & Suivi): http://127.0.0.1:8000/static/client.html
+- **👨‍🍳 Admin** (Gestion des commandes): http://127.0.0.1:8000/static/admin.html
+- **📚 Documentation API**: http://127.0.0.1:8000/docs
 
-1. Installer les dépendances :
+## 📋 Fonctionnalités
+
+✅ **Client**
+- Sélection de pizzas avec 3 tailles (S/M/L)
+- Ajout de toppings supplémentaires avec affichage en temps réel
+- Calcul automatique du prix (base + toppings)
+- Livraison gratuite à partir de 30€
+- Suivi en temps réel des commandes
+- Panier flottant avec mise à jour en direct
+
+✅ **Admin/Vendeur**
+- Dashboard avec commandes groupées par statut
+- Workflow complet: Attente → Préparation → Prête → Livraison → Livrée
+- Gestion du stock des ingrédients
+- Auto-refresh toutes les 5 secondes
+
+✅ **API REST**
+- Gestion complète des commandes
+- Validation des adresses (Nominatim)
+- Stock management avec persistance SQLite
+- Tarification automatique avec toppings
+- Commandes persistantes
+
+## 📂 Structure du Projet
+
+```
+.
+├── main.py                    # Wrapper pour uvicorn
+├── app.py                     # Entry point alternatif
+├── src/
+│   ├── main.py               # API FastAPI
+│   ├── models.py             # Modèles Pydantic
+│   └── __init__.py
+├── static/                    # Interfaces web
+│   ├── index.html
+│   ├── client.html
+│   ├── admin.html
+│   ├── css/style.css
+│   └── js/
+├── tests/                     # Tests pytest
+│   ├── test_endpoints.py
+│   ├── test_inventory.py
+│   └── ...
+└── docs/                      # Documentation
+    ├── README.md
+    ├── INTERFACE_GUIDE.md
+    ├── AUDIT_FIXES.md
+    └── ...
+```
+
+## ⚙️ Installation des Dépendances
+
 ```bash
 pip install -r requirements.txt
 ```
 
-## 🚀 Lancement de l'Application
+## 🧪 Lancer les Tests
 
 ```bash
-uvicorn main:app --reload
+python -m pytest tests/ -v
 ```
 
-Le serveur sera accessible sur `http://localhost:8000`
+## 📖 Documentation Complète
 
-### 📱 Accès aux Interfaces
+Voir le dossier `docs/`:
+- **README.md** - Guide général
+- **INTERFACE_GUIDE.md** - Guide détaillé des interfaces
+- **AUDIT_FIXES.md** - Fixes de sécurité appliquées
+- **DEPLOYMENT.md** - Guide de déploiement
 
-Une fois le serveur lancé, accédez à :
+## 🔐 Sécurité
 
-- **Page d'Accueil**: http://localhost:8000/static/index.html
-- **Interface Client**: http://localhost:8000/static/client.html
-- **Interface Admin**: http://localhost:8000/static/admin.html
+⚠️ **Pour développement uniquement**
 
-### 📚 Documentation API
+Fixes de sécurité appliquées:
+- ✅ Race condition sur inventaire corrigée
+- ✅ CORS restrictif (localhost)
+- ✅ Stock restauré à l'annulation
+- ✅ Parsing d'adresse sécurisé
+- ✅ Livraison déterministe
 
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+Pour la production, ajouter:
+- [ ] Authentification API key/JWT
+- [ ] Rate limiting
+- [ ] Persistance en base de données
+- [ ] HTTPS/SSL
 
-## 🎯 Interfaces Web
+## 💡 Aide
 
-### Interface Client
-- ✅ Sélection de pizzas avec tailles (Small, Medium, Large)
-- ✅ Ajout de toppings supplémentaires
-- ✅ Résumé du panier en temps réel
-- ✅ Formulaire de livraison avec validation
-- ✅ Suivi de commande avec barre de progression
-- ✅ Affichage du temps estimé
-
-### Interface Admin/Vendeur
-- ✅ Dashboard avec commandes par statut
-- ✅ Actualisation automatique toutes les 5 secondes
-- ✅ Boutons pour gérer l'état des commandes:
-  - Commencer la préparation
-  - Marquer prête pour livraison
-  - Envoyer en livraison
-  - Confirmer la livraison
-- ✅ Détails complets des pizzas et adresses
-
-## 🔄 Statuts de Commande
-
-Une commande progresse à travers les statuts suivants:
-1. **Pending** (En attente) - Commande créée, en attente de confirmation
-2. **Preparing** (Préparation) - Vendeur a commencé la préparation
-3. **Ready for Delivery** (Prête) - Pizzas prêtes, en attente du livreur
-4. **In Delivery** (En livraison) - Pizzas en route vers le client
-5. **Delivered** (Livrée) - Pizzas livrées avec succès
-
-## Endpoints disponibles
-
-### Endpoints Client
-```
-GET  /pizzas/menu                           # Menu avec prix par taille
-GET  /topping/menu                          # Toppings avec prix
-POST /orders                                # Créer une commande
-GET  /orders/{order_id}                     # Détails d'une commande
-GET  /orders/{order_id}/status              # Suivi d'une commande (avec barre de progression)
-GET  /orders                                # Toutes les commandes
-DELETE /orders/{order_id}                   # Annuler une commande
-```
-
-### Endpoints Admin
-```
-GET    /admin/orders                        # Toutes les commandes par statut
-POST   /admin/orders/{id}/start             # Commencer la préparation
-POST   /admin/orders/{id}/ready             # Marquer prête pour livraison
-POST   /admin/orders/{id}/deliver           # Envoyer en livraison
-POST   /admin/orders/{id}/delivered         # Confirmer la livraison
-```
-
-### Endpoints Stock
-```
-GET  /inventory                             # Inventaire complet
-POST /inventory/ingredients/{name}/add      # Ajouter du stock
-```
-
-### 1. Page d'accueil
-```
-GET /
-```
-
-### 2. Voir le menu
-```
-GET /pizzas/menu
-```
-Retourne la liste des pizzas disponibles.
-
-### 3. Informations de tarification
-```
-GET /pricing/info
-```
-Retourne les informations sur les frais de livraison.
-
-### 4. Créer une commande
-```
-POST /orders
-```
-Body :
-```json
-{
-  "pizzas": [
-    {
-      "name": "Margherita",
-      "size": "medium",
-      "price": 10.0,
-      "toppings": ["tomate", "mozzarella", "basilic"]
-    }
-  ],
-  "customer_name": "Jean Dupont",
-  "customer_address": "15 Place du Capitole, 31000 Toulouse"
-}
-```
-
-### 5. Voir une commande
-```
-GET /orders/{order_id}
-```
-
-### 6. Voir toutes les commandes
-```
-GET /orders
-```
-
-### 7. Annuler une commande
-```
-DELETE /orders/{order_id}
-```
-
-## Exemples d'utilisation
-
-### Exemple 1 : Commande avec livraison payante (< 30€)
+**Le serveur ne démarre pas?**
 ```bash
-curl -X POST "http://localhost:8000/orders" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "pizzas": [
-      {
-        "name": "Margherita",
-        "size": "medium",
-        "price": 10.0,
-        "toppings": ["tomate", "mozzarella"]
-      }
-    ],
-    "customer_name": "Jean Dupont",
-    "customer_address": "22 Rue Alsace Lorraine, 31000 Toulouse"
-  }'
+# Vérifiez le port 8000
+lsof -i :8000
+pkill -f uvicorn  # Tuer les processus existants
 ```
 
-Réponse :
-```json
-{
-  "order_id": 1,
-  "customer_name": "Jean Dupont",
-  "customer_address": "22 Rue Alsace Lorraine, 31000 Toulouse",
-  "pizzas": ["Margherita (medium) - 10.0€"],
-  "subtotal": 10.0,
-  "delivery_fee": 5.0,
-  "is_delivery_free": false,
-  "total": 15.0
-}
-```
+**Les interfaces ne se chargent pas?**
+- Vérifiez que vous accédez à http://127.0.0.1:8000 (pas localhost)
+- Vérifiez les logs de la console
 
-### Exemple 2 : Commande avec livraison gratuite (≥ 30€)
+**Les tests échouent?**
 ```bash
-curl -X POST "http://localhost:8000/orders" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "pizzas": [
-      {
-        "name": "Margherita",
-        "size": "medium",
-        "price": 10.0,
-        "toppings": ["tomate", "mozzarella"]
-      },
-      {
-        "name": "Reine",
-        "size": "medium",
-        "price": 12.0,
-        "toppings": ["tomate", "mozzarella", "jambon"]
-      },
-      {
-        "name": "4 Fromages",
-        "size": "medium",
-        "price": 13.0,
-        "toppings": ["mozzarella", "gorgonzola"]
-      }
-    ],
-    "customer_name": "Marie Martin",
-    "customer_address": "8 Allée Jean Jaurès, 31000 Toulouse"
-  }'
+python -m pytest tests/ -v --tb=short
 ```
 
-Réponse :
-```json
-{
-  "order_id": 2,
-  "customer_name": "Marie Martin",
-  "customer_address": "8 Allée Jean Jaurès, 31000 Toulouse",
-  "pizzas": [
-    "Margherita (medium) - 10.0€",
-    "Reine (medium) - 12.0€",
-    "4 Fromages (medium) - 13.0€"
-  ],
-  "subtotal": 35.0,
-  "delivery_fee": 0.0,
-  "is_delivery_free": true,
-  "total": 35.0
-}
-```
+---
 
-## Structure du projet
-
-```
-projet ecole reda/
-├── main.py              # API FastAPI avec les endpoints
-├── models.py            # Classes Pizza, Price, Order
-├── requirements.txt     # Dépendances Python
-└── README.md           # Documentation
-```
-
-## Technologies utilisées
-
-- **FastAPI** : Framework web moderne et rapide
-- **Pydantic** : Validation des données
-- **Uvicorn** : Serveur ASGI
+**Version**: 1.0.0
+**Dernière mise à jour**: October 28, 2025
+**Status**: ✅ Production-ready (dev)

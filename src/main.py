@@ -3,7 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
 from typing import List, Dict
-from models import Pizza, PizzaCreate, Order, OrderCreate, Price, Address, InventoryManager, Topping, Ingredient, PizzaMenuPrice, OrderStatus
+from .models import Pizza, PizzaCreate, Order, OrderCreate, Price, Address, InventoryManager, Topping, Ingredient, PizzaMenuPrice, OrderStatus
+from .db import SQLiteInventoryManager
 from pydantic import ValidationError
 import logging
 import threading
@@ -23,16 +24,19 @@ app = FastAPI(
 )
 
 # Configurer CORS pour permettre les requêtes du frontend
+# En développement: localhost et 127.0.0.1
+# En production: définir via variable d'environnement ALLOWED_ORIGINS
+allowed_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:8000,http://127.0.0.1:8000").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Permettre toutes les origines (à adapter en production)
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=allowed_origins,
+    allow_credentials=False,  # Désactiver credentials quand allow_origins n'est pas ["*"]
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "Authorization"],
 )
 
 # Monter les fichiers statiques (HTML, CSS, JS)
-static_dir = os.path.join(os.path.dirname(__file__), "static")
+static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
 if not os.path.exists(static_dir):
     os.makedirs(static_dir)
     logger.info(f"Dossier static créé: {static_dir}")
@@ -44,9 +48,11 @@ orders_db: Dict[int, Order] = {}
 next_order_id = 1
 # Lock pour la thread-safety sur next_order_id
 order_id_lock = threading.Lock()
+# Lock pour la thread-safety sur l'inventaire
+inventory_lock = threading.Lock()
 
-# Gestionnaire d'inventaire
-inventory = InventoryManager()
+# Gestionnaire d'inventaire avec persistance SQLite
+inventory = SQLiteInventoryManager()
 
 
 @app.get("/")
@@ -157,14 +163,19 @@ def create_order(order_create: OrderCreate) -> dict:
         logger.warning("Tentative de création de commande sans nom de client")
         raise HTTPException(status_code=400, detail="Le nom du client est obligatoire")
 
-    # Vérifier la disponibilité du stock AVANT de créer la commande
-    can_fulfill, error_message = inventory.can_fulfill_order(order_create.pizzas)
-    if not can_fulfill:
-        logger.warning(f"Commande rejetée pour {order_create.customer_name}: {error_message}")
-        raise HTTPException(status_code=409, detail=f"Commande impossible: {error_message}")
-
-    # Convertir les PizzaCreate en Pizza avec calcul automatique du prix
+    # Convertir les PizzaCreate en Pizza avec calcul automatique du prix (AVANT le lock)
     pizzas_with_prices = [Pizza.from_create(pizza_create) for pizza_create in order_create.pizzas]
+
+    # LOCK: Vérifier et réduire l'inventaire de manière atomique (thread-safe)
+    with inventory_lock:
+        # Vérifier la disponibilité du stock AVANT de créer la commande
+        can_fulfill, error_message = inventory.can_fulfill_order(order_create.pizzas)
+        if not can_fulfill:
+            logger.warning(f"Commande rejetée pour {order_create.customer_name}: {error_message}")
+            raise HTTPException(status_code=409, detail=f"Commande impossible: {error_message}")
+
+        # Réduire l'inventaire (protégé par le lock)
+        inventory.reduce_inventory(pizzas_with_prices)
 
     # Utiliser le lock pour assurer que next_order_id est thread-safe
     with order_id_lock:
@@ -177,9 +188,6 @@ def create_order(order_create: OrderCreate) -> dict:
         customer_name=order_create.customer_name,
         customer_address=order_create.customer_address
     )
-
-    # Réduire l'inventaire après création de la commande
-    inventory.reduce_inventory(pizzas_with_prices)
 
     orders_db[current_order_id] = order
 
@@ -206,13 +214,18 @@ def get_all_orders() -> List[dict]:
 
 @app.delete("/orders/{order_id}")
 def cancel_order(order_id: int) -> dict:
-    """Annule une commande"""
+    """Annule une commande et restaure l'inventaire"""
     if order_id not in orders_db:
         logger.warning(f"Tentative d'annulation d'une commande inexistante: ID={order_id}")
         raise HTTPException(status_code=404, detail=f"Commande {order_id} non trouvée")
 
     order = orders_db.pop(order_id)
-    logger.info(f"Commande annulée: ID={order_id}, Client={order.customer_name}")
+
+    # Restaurer l'inventaire quand la commande est annulée
+    with inventory_lock:
+        inventory.restore_inventory(order.pizzas)
+
+    logger.info(f"Commande annulée: ID={order_id}, Client={order.customer_name}, Inventaire restauré")
     return {
         "message": f"Commande {order_id} annulée avec succès",
         "cancelled_order": order.get_summary()
