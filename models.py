@@ -9,6 +9,22 @@ class Price:
     DELIVERY_FEE = 5.0
     FREE_DELIVERY_THRESHOLD = 30.0
 
+    # Pizzas valides disponibles au menu
+    VALID_PIZZAS = [
+        "margherita",
+        "reine",
+        "4 fromages",
+        "calzone",
+        "végétarienne",
+        "pepperoni",
+    ]
+
+    # Alias pour les noms de pizzas
+    PIZZA_ALIASES = {
+        "vegetarienne": "végétarienne",  # Sans accent
+        "reina": "reine",  # Variante
+    }
+
     # Prix de base des pizzas (medium)
     BASE_PRICES = {
         "margherita": 8.0,
@@ -220,6 +236,23 @@ class PizzaCreate(BaseModel):
     name: str = Field(..., description="Nom de la pizza")
     size: str = Field(..., description="Taille: small, medium, large")
     toppings: List[str] = Field(default_factory=list, description="Liste des garnitures")
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """Valide que le nom de la pizza est dans le menu"""
+        name_lower = v.lower()
+
+        # Vérifier si c'est un alias
+        if name_lower in Price.PIZZA_ALIASES:
+            name_lower = Price.PIZZA_ALIASES[name_lower]
+
+        # Vérifier si c'est une pizza valide
+        if name_lower not in Price.VALID_PIZZAS:
+            valid_pizzas_str = ", ".join(Price.VALID_PIZZAS)
+            raise ValueError(f"La pizza doit être l'une de: {valid_pizzas_str}")
+
+        return v
 
     @field_validator("size")
     @classmethod

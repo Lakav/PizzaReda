@@ -250,6 +250,29 @@ class TestCreateOrder:
         assert "small, medium, large" in response.json()["detail"][0]["msg"].lower() or \
                "small, medium, large" in str(response.json())
 
+    def test_create_order_invalid_pizza_name(self):
+        """Test qu'une commande avec un nom de pizza invalide est rejetée"""
+        order_data = {
+            "pizzas": [
+                {
+                    "name": "caca",  # Pizza invalide
+                    "size": "medium",
+                    "toppings": ["tomate", "mozzarella", "basilic"]
+                }
+            ],
+            "customer_name": "Test",
+            "customer_address": {
+                "street_number": "22",
+                "street": "Rue Alsace-Lorraine",
+                "city": "Toulouse",
+                "postal_code": "31000"
+            }
+        }
+        response = client.post("/orders", json=order_data)
+        assert response.status_code == 422
+        detail_str = str(response.json()["detail"])
+        assert "margherita" in detail_str.lower() or "4 fromages" in detail_str.lower()
+
     def test_create_order_missing_address(self):
         """Test qu'on ne peut pas créer une commande avec adresse invalide"""
         order_data = {
