@@ -2,6 +2,18 @@ from typing import List, Optional, Dict
 from pydantic import BaseModel, Field, model_validator, field_validator
 import requests
 from typing import Tuple
+from datetime import datetime
+from enum import Enum
+
+
+class OrderStatus(str, Enum):
+    """Énumération des statuts possibles d'une commande"""
+    PENDING = "pending"  # En attente de confirmation
+    PREPARING = "preparing"  # En cours de préparation
+    READY_FOR_DELIVERY = "ready_for_delivery"  # Prête pour livraison
+    IN_DELIVERY = "in_delivery"  # En cours de livraison
+    DELIVERED = "delivered"  # Livrée
+    CANCELLED = "cancelled"  # Annulée
 
 
 class Price:
@@ -32,9 +44,7 @@ class Price:
         "4 fromages": 11.0,
         "calzone": 12.0,
         "végétarienne": 9.0,
-        "vegetarienne": 9.0,  # Sans accent
         "pepperoni": 10.5,
-        "reina": 10.0,  # Alias pour reine
     }
 
     # Multiplicateurs selon la taille
@@ -68,11 +78,9 @@ class Price:
     BASE_TOPPINGS = {
         "margherita": ["tomate", "mozzarella", "basilic"],
         "reine": ["tomate", "mozzarella", "jambon", "champignons"],
-        "reina": ["tomate", "mozzarella", "jambon", "champignons"],
         "4 fromages": ["mozzarella", "gorgonzola", "chèvre", "emmental"],
         "calzone": ["tomate", "mozzarella", "jambon", "oeuf"],
         "végétarienne": ["tomate", "mozzarella", "poivrons", "oignons", "olives"],
-        "vegetarienne": ["tomate", "mozzarella", "poivrons", "oignons", "olives"],
         "pepperoni": ["tomate", "mozzarella", "pepperoni"],
     }
 
@@ -313,6 +321,11 @@ class Order(BaseModel):
     pizzas: List[Pizza] = Field(..., description="Liste des pizzas commandées")
     customer_name: str = Field(..., description="Nom du client")
     customer_address: Address = Field(..., description="Adresse de livraison")
+    status: OrderStatus = Field(default=OrderStatus.PENDING, description="Statut de la commande")
+    created_at: datetime = Field(default_factory=datetime.now, description="Date/heure de création")
+    started_at: Optional[datetime] = Field(default=None, description="Date/heure du début de préparation")
+    ready_at: Optional[datetime] = Field(default=None, description="Date/heure de fin de préparation")
+    delivered_at: Optional[datetime] = Field(default=None, description="Date/heure de livraison")
 
     def calculate_subtotal(self) -> float:
         """Calcule le sous-total (prix des pizzas uniquement)"""
@@ -327,6 +340,14 @@ class Order(BaseModel):
         """Calcule le total de la commande"""
         subtotal = self.calculate_subtotal()
         return Price.calculate_total(subtotal)
+
+    def get_estimated_delivery_time(self) -> int:
+        """Retourne le temps estimé de livraison en minutes (simulation)"""
+        # Temps de préparation: 15-20 minutes (simule une valeur basée sur l'ID)
+        prep_time = 15 + (self.order_id % 6)
+        # Temps de livraison: basé sur la rue (5-15 minutes en simulation)
+        delivery_time = 5 + (hash(self.customer_address.street) % 11)
+        return prep_time + delivery_time
 
     def get_summary(self) -> dict:
         """Retourne un résumé de la commande avec détail des pizzas et toppings"""
@@ -352,7 +373,13 @@ class Order(BaseModel):
             "subtotal": round(subtotal, 2),
             "delivery_fee": round(delivery_fee, 2),
             "is_delivery_free": delivery_fee == 0,
-            "total": round(total, 2)
+            "total": round(total, 2),
+            "status": self.status.value,
+            "created_at": self.created_at.isoformat(),
+            "started_at": self.started_at.isoformat() if self.started_at else None,
+            "ready_at": self.ready_at.isoformat() if self.ready_at else None,
+            "delivered_at": self.delivered_at.isoformat() if self.delivered_at else None,
+            "estimated_delivery_minutes": self.get_estimated_delivery_time()
         }
 
 
@@ -458,12 +485,13 @@ class InventoryManager:
         return True
 
     def get_all_toppings(self) -> List[Topping]:
-        """Retourne la liste de tous les toppings disponibles avec leur prix (+1€)"""
-        # Les toppings ont tous le même prix: 1€ supplémentaire
-        return [
-            Topping(name=name, price=1.0)
-            for name in sorted(self.ingredients.keys())
-        ]
+        """Retourne la liste de tous les toppings disponibles avec leur prix réel"""
+        toppings = []
+        for name in sorted(self.ingredients.keys()):
+            # Utiliser le prix du topping s'il existe, sinon 1.0€ par défaut
+            price = Price.TOPPING_PRICES.get(name.lower(), 1.0)
+            toppings.append(Topping(name=name, price=price))
+        return toppings
 
     def get_full_inventory(self) -> dict:
         """

@@ -1,6 +1,6 @@
-# API de Livraison de Pizza
+# 🍕 Pizzaiolo - Système Complet de Gestion des Commandes de Pizza
 
-API REST pour gérer les commandes de pizza avec livraison gratuite à partir de 30€.
+API REST complète avec interfaces web pour clients et vendeurs. Gestion des commandes de pizza avec livraison gratuite à partir de 30€, suivi en temps réel, et gestion du stock.
 
 ## Architecture
 
@@ -22,21 +22,83 @@ Le projet utilise les classes suivantes :
 pip install -r requirements.txt
 ```
 
-## Lancement de l'API
+## 🚀 Lancement de l'Application
 
 ```bash
 uvicorn main:app --reload
 ```
 
-L'API sera accessible sur `http://localhost:8000`
+Le serveur sera accessible sur `http://localhost:8000`
 
-## Documentation interactive
+### 📱 Accès aux Interfaces
 
-Une fois l'API lancée, accédez à :
-- Swagger UI : `http://localhost:8000/docs`
-- ReDoc : `http://localhost:8000/redoc`
+Une fois le serveur lancé, accédez à :
+
+- **Page d'Accueil**: http://localhost:8000/static/index.html
+- **Interface Client**: http://localhost:8000/static/client.html
+- **Interface Admin**: http://localhost:8000/static/admin.html
+
+### 📚 Documentation API
+
+- **Swagger UI**: http://localhost:8000/docs
+- **ReDoc**: http://localhost:8000/redoc
+
+## 🎯 Interfaces Web
+
+### Interface Client
+- ✅ Sélection de pizzas avec tailles (Small, Medium, Large)
+- ✅ Ajout de toppings supplémentaires
+- ✅ Résumé du panier en temps réel
+- ✅ Formulaire de livraison avec validation
+- ✅ Suivi de commande avec barre de progression
+- ✅ Affichage du temps estimé
+
+### Interface Admin/Vendeur
+- ✅ Dashboard avec commandes par statut
+- ✅ Actualisation automatique toutes les 5 secondes
+- ✅ Boutons pour gérer l'état des commandes:
+  - Commencer la préparation
+  - Marquer prête pour livraison
+  - Envoyer en livraison
+  - Confirmer la livraison
+- ✅ Détails complets des pizzas et adresses
+
+## 🔄 Statuts de Commande
+
+Une commande progresse à travers les statuts suivants:
+1. **Pending** (En attente) - Commande créée, en attente de confirmation
+2. **Preparing** (Préparation) - Vendeur a commencé la préparation
+3. **Ready for Delivery** (Prête) - Pizzas prêtes, en attente du livreur
+4. **In Delivery** (En livraison) - Pizzas en route vers le client
+5. **Delivered** (Livrée) - Pizzas livrées avec succès
 
 ## Endpoints disponibles
+
+### Endpoints Client
+```
+GET  /pizzas/menu                           # Menu avec prix par taille
+GET  /topping/menu                          # Toppings avec prix
+POST /orders                                # Créer une commande
+GET  /orders/{order_id}                     # Détails d'une commande
+GET  /orders/{order_id}/status              # Suivi d'une commande (avec barre de progression)
+GET  /orders                                # Toutes les commandes
+DELETE /orders/{order_id}                   # Annuler une commande
+```
+
+### Endpoints Admin
+```
+GET    /admin/orders                        # Toutes les commandes par statut
+POST   /admin/orders/{id}/start             # Commencer la préparation
+POST   /admin/orders/{id}/ready             # Marquer prête pour livraison
+POST   /admin/orders/{id}/deliver           # Envoyer en livraison
+POST   /admin/orders/{id}/delivered         # Confirmer la livraison
+```
+
+### Endpoints Stock
+```
+GET  /inventory                             # Inventaire complet
+POST /inventory/ingredients/{name}/add      # Ajouter du stock
+```
 
 ### 1. Page d'accueil
 ```

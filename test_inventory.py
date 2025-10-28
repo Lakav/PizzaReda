@@ -81,11 +81,14 @@ class TestInventoryEndpoints:
         assert "mozzarella" in topping_names
         assert "basilic" in topping_names
 
-        # Vérifier la structure
+        # Vérifier la structure et les prix corrects
+        from models import Price
         for topping in data:
             assert "name" in topping
             assert "price" in topping
-            assert topping["price"] == 1.0  # Tous les toppings coûtent 1€
+            # Vérifier que le prix correspond à TOPPING_PRICES ou vaut 1.0 par défaut
+            expected_price = Price.TOPPING_PRICES.get(topping["name"].lower(), 1.0)
+            assert topping["price"] == expected_price
 
     def test_add_ingredient_stock_success(self):
         """Test d'ajout de stock pour un ingrédient"""

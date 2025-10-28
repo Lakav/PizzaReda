@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pizzaiolo - Admin</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header>
+        <h1>👨‍🍳 Pizzaiolo Admin</h1>
+        <p>Gérez les commandes de pizzas en temps réel</p>
+    </header>
+
+    <div class="container">
+        <div class="flex-row" style="margin-bottom: 30px;">
+            <div class="w-50" style="min-width: 200px;">
+                <div class="card">
+                    <div class="card-title" style="font-size: 1.2em; border: none; margin: 0;">Commandes</div>
+                    <div style="font-size: 2em; font-weight: bold; color: var(--primary-color); margin-top: 10px;" id="total-orders">0</div>
+                </div>
+            </div>
+            <div class="w-50" style="min-width: 200px;">
+                <button class="btn btn-secondary btn-block" id="refresh-btn" style="padding: 20px; font-size: 1.1em;">
+                    🔄 Actualiser
+                </button>
+            </div>
+        </div>
+
+        <div class="nav-tabs" style="margin-bottom: 30px;">
+            <button class="nav-btn active" data-status="pending">
+                En attente
+                <span class="status-count" data-status="pending">0</span>
+            </button>
+            <button class="nav-btn" data-status="preparing">
+                Préparation
+                <span class="status-count" data-status="preparing">0</span>
+            </button>
+            <button class="nav-btn" data-status="ready_for_delivery">
+                Prête
+                <span class="status-count" data-status="ready_for_delivery">0</span>
+            </button>
+            <button class="nav-btn" data-status="in_delivery">
+                En livraison
+                <span class="status-count" data-status="in_delivery">0</span>
+            </button>
+            <button class="nav-btn" data-status="delivered">
+                Livrées
+                <span class="status-count" data-status="delivered">0</span>
+            </button>
+        </div>
+
+        <div id="orders-container"></div>
+
+        <div id="no-orders" class="card" style="text-align: center; color: #999;">
+            <p style="font-size: 1.2em; margin: 30px 0;">Aucune commande pour ce statut</p>
+        </div>
+    </div>
+
+    <!-- Alerts -->
+    <div id="alert-container"></div>
+
+    <script src="/static/js/admin.js"></script>
+</body>
+</html>

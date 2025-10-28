@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pizzaiolo - Commande en Ligne</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <header>
+        <h1>🍕 Pizzaiolo</h1>
+        <p>Délicieuses pizzas livrées chaud à votre porte</p>
+    </header>
+
+    <div class="container">
+        <div class="nav-tabs">
+            <button class="nav-btn active" data-tab="order-tab">Commander</button>
+            <button class="nav-btn" data-tab="tracking-tab">Suivi de commande</button>
+        </div>
+
+        <!-- TAB 1: ORDER -->
+        <div id="order-tab" class="tab-content active">
+            <div class="flex-row">
+                <div class="w-50">
+                    <div class="card">
+                        <div class="card-title">Sélectionnez vos pizzas</div>
+                        <div id="menu-container" class="pizza-grid"></div>
+                    </div>
+                </div>
+
+                <div class="w-50">
+                    <!-- Résumé du panier -->
+                    <div class="cart-summary">
+                        <div class="card-title">Votre Panier</div>
+                        <div id="cart-items">
+                            <p style="color: #999;">Aucune pizza sélectionnée</p>
+                        </div>
+                    </div>
+
+                    <!-- Formulaire client -->
+                    <div class="card" style="margin-top: 20px;">
+                        <div class="card-title">Vos informations</div>
+                        <form id="customer-form">
+                            <div class="form-group">
+                                <label for="customer-name">Nom *</label>
+                                <input type="text" id="customer-name" placeholder="Jean Dupont" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="street-number">Numéro de rue *</label>
+                                <input type="text" id="street-number" placeholder="22" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="street-name">Nom de la rue *</label>
+                                <input type="text" id="street-name" placeholder="Rue Alsace-Lorraine" required>
+                            </div>
+
+                            <div class="flex-row">
+                                <div class="w-50" style="min-width: 200px;">
+                                    <div class="form-group">
+                                        <label for="postal-code">Code postal *</label>
+                                        <input type="text" id="postal-code" placeholder="31000" value="31000" required>
+                                    </div>
+                                </div>
+                                <div class="w-50" style="min-width: 200px;">
+                                    <div class="form-group">
+                                        <label for="city">Ville *</label>
+                                        <input type="text" id="city" placeholder="Toulouse" value="Toulouse" required>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary btn-block" id="submit-order">
+                                Valider la commande
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: TRACKING -->
+        <div id="tracking-tab" class="tab-content hidden">
+            <div class="card">
+                <div class="card-title">Suivi de votre commande</div>
+
+                <div class="form-group">
+                    <label for="tracking-id">Numéro de commande *</label>
+                    <input type="number" id="tracking-id" placeholder="Entrez votre numéro de commande">
+                </div>
+
+                <button type="button" class="btn btn-primary" id="track-btn">Rechercher</button>
+            </div>
+
+            <div id="tracking-result" class="hidden" style="margin-top: 30px;">
+                <div class="order-card">
+                    <div class="order-header">
+                        <div>
+                            <div class="order-id">Commande #<span id="track-order-id"></span></div>
+                            <div class="order-customer">Client: <span id="track-customer-name"></span></div>
+                        </div>
+                        <span id="track-status-badge" class="badge"></span>
+                    </div>
+
+                    <div id="track-status-label" style="font-size: 1.1em; margin: 20px 0; font-weight: bold; color: var(--primary-color);"></div>
+
+                    <div class="progress-bar">
+                        <div id="track-progress" class="progress-fill" style="width: 0%"></div>
+                    </div>
+
+                    <div class="order-details">
+                        <div class="detail-item">
+                            <div class="detail-label">Adresse de livraison</div>
+                            <div class="detail-value" id="track-address"></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Sous-total</div>
+                            <div class="detail-value" id="track-subtotal"></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Frais de livraison</div>
+                            <div class="detail-value" id="track-delivery-fee"></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Total</div>
+                            <div class="detail-value" id="track-total"></div>
+                        </div>
+                        <div class="detail-item">
+                            <div class="detail-label">Temps estimé</div>
+                            <div class="detail-value" id="track-time"></div>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-color);">
+                        <div class="card-title" style="margin: 0 0 15px 0; border: none; padding: 0; font-size: 1.2em;">Pizzas commandées</div>
+                        <div id="track-pizzas"></div>
+                    </div>
+
+                    <div id="track-timestamps" style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border-color); font-size: 0.9em; color: #666;">
+                        <p><strong>Créée le:</strong> <span id="track-created"></span></p>
+                        <p id="track-started-row" class="hidden"><strong>Préparation commencée:</strong> <span id="track-started"></span></p>
+                        <p id="track-ready-row" class="hidden"><strong>Prête à:</strong> <span id="track-ready"></span></p>
+                        <p id="track-delivered-row" class="hidden"><strong>Livrée à:</strong> <span id="track-delivered"></span></p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tracking-error" class="alert alert-error hidden" style="margin-top: 20px;">
+                <strong>Erreur:</strong> <span id="tracking-error-msg"></span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alerts -->
+    <div id="alert-container"></div>
+
+    <script src="/static/js/client.js"></script>
+</body>
+</html>

@@ -4,16 +4,16 @@ Tests pour les endpoints de l'API FastAPI
 
 import pytest
 from fastapi.testclient import TestClient
-from main import app, orders_db, next_order_id
+import main
+from main import app, orders_db
 
 
 @pytest.fixture(autouse=True)
 def reset_database():
-    """Reset la base de données avant chaque test"""
-    global next_order_id
+    """Reset la base de données et next_order_id avant chaque test"""
     orders_db.clear()
-    # Note: next_order_id ne peut pas être réinitialisé facilement car c'est une variable globale
-    # mais ce n'est pas critique pour les tests
+    # Réinitialiser next_order_id proprement en modifiant la variable du module main
+    main.next_order_id = 1
     yield
 
 

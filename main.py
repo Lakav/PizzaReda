@@ -1,7 +1,20 @@
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+import os
 from typing import List, Dict
-from models import Pizza, PizzaCreate, Order, OrderCreate, Price, Address, InventoryManager, Topping, Ingredient, PizzaMenuPrice
+from models import Pizza, PizzaCreate, Order, OrderCreate, Price, Address, InventoryManager, Topping, Ingredient, PizzaMenuPrice, OrderStatus
 from pydantic import ValidationError
+import logging
+import threading
+from datetime import datetime
+
+# Configurer le logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 app = FastAPI(
     title="API de Livraison de Pizza",
@@ -9,9 +22,28 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Configurer CORS pour permettre les requêtes du frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Permettre toutes les origines (à adapter en production)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Monter les fichiers statiques (HTML, CSS, JS)
+static_dir = os.path.join(os.path.dirname(__file__), "static")
+if not os.path.exists(static_dir):
+    os.makedirs(static_dir)
+    logger.info(f"Dossier static créé: {static_dir}")
+
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
+
 # Base de données en mémoire pour les commandes
 orders_db: Dict[int, Order] = {}
 next_order_id = 1
+# Lock pour la thread-safety sur next_order_id
+order_id_lock = threading.Lock()
 
 # Gestionnaire d'inventaire
 inventory = InventoryManager()
@@ -118,21 +150,29 @@ def create_order(order_create: OrderCreate) -> dict:
     global next_order_id
 
     if not order_create.pizzas:
+        logger.warning(f"Tentative de création de commande sans pizzas par {order_create.customer_name}")
         raise HTTPException(status_code=400, detail="La commande doit contenir au moins une pizza")
 
     if not order_create.customer_name:
+        logger.warning("Tentative de création de commande sans nom de client")
         raise HTTPException(status_code=400, detail="Le nom du client est obligatoire")
 
     # Vérifier la disponibilité du stock AVANT de créer la commande
     can_fulfill, error_message = inventory.can_fulfill_order(order_create.pizzas)
     if not can_fulfill:
+        logger.warning(f"Commande rejetée pour {order_create.customer_name}: {error_message}")
         raise HTTPException(status_code=409, detail=f"Commande impossible: {error_message}")
 
     # Convertir les PizzaCreate en Pizza avec calcul automatique du prix
     pizzas_with_prices = [Pizza.from_create(pizza_create) for pizza_create in order_create.pizzas]
 
+    # Utiliser le lock pour assurer que next_order_id est thread-safe
+    with order_id_lock:
+        current_order_id = next_order_id
+        next_order_id += 1
+
     order = Order(
-        order_id=next_order_id,
+        order_id=current_order_id,
         pizzas=pizzas_with_prices,
         customer_name=order_create.customer_name,
         customer_address=order_create.customer_address
@@ -141,8 +181,9 @@ def create_order(order_create: OrderCreate) -> dict:
     # Réduire l'inventaire après création de la commande
     inventory.reduce_inventory(pizzas_with_prices)
 
-    orders_db[next_order_id] = order
-    next_order_id += 1
+    orders_db[current_order_id] = order
+
+    logger.info(f"Commande créée: ID={current_order_id}, Client={order_create.customer_name}, Total={order.calculate_total()}€")
 
     return order.get_summary()
 
@@ -167,9 +208,11 @@ def get_all_orders() -> List[dict]:
 def cancel_order(order_id: int) -> dict:
     """Annule une commande"""
     if order_id not in orders_db:
+        logger.warning(f"Tentative d'annulation d'une commande inexistante: ID={order_id}")
         raise HTTPException(status_code=404, detail=f"Commande {order_id} non trouvée")
 
     order = orders_db.pop(order_id)
+    logger.info(f"Commande annulée: ID={order_id}, Client={order.customer_name}")
     return {
         "message": f"Commande {order_id} annulée avec succès",
         "cancelled_order": order.get_summary()
@@ -211,16 +254,182 @@ def add_ingredient_stock(ingredient_name: str, quantity: int) -> dict:
     - quantity: Quantité à ajouter (doit être positif)
     """
     if quantity <= 0:
+        logger.warning(f"Tentative d'ajout de stock avec quantité invalide: {ingredient_name}={quantity}")
         raise HTTPException(status_code=400, detail="La quantité doit être positive")
 
     success = inventory.add_ingredient_stock(ingredient_name, quantity)
     if not success:
+        logger.warning(f"Tentative d'ajout de stock pour un ingrédient inexistant: {ingredient_name}")
         raise HTTPException(status_code=404, detail=f"Ingrédient '{ingredient_name}' non trouvé")
 
     current_stock = inventory.get_ingredient_stock(ingredient_name)
+    logger.info(f"Stock augmenté: {ingredient_name} +{quantity} (nouveau stock: {current_stock})")
     return {
         "message": f"Stock de {ingredient_name} augmenté de {quantity}",
         "ingredient_name": ingredient_name,
         "quantity_added": quantity,
         "new_stock": current_stock
+    }
+
+
+# ====================
+# ENDPOINTS POUR SUIVI DES COMMANDES (CLIENT)
+# ====================
+
+@app.get("/orders/{order_id}/status")
+def get_order_status(order_id: int) -> dict:
+    """
+    Obtient le statut détaillé d'une commande pour le client
+    """
+    if order_id not in orders_db:
+        raise HTTPException(status_code=404, detail=f"Commande {order_id} non trouvée")
+
+    order = orders_db[order_id]
+    summary = order.get_summary()
+
+    # Ajouter des informations de progression
+    progress = {
+        "pending": 0,
+        "preparing": 25,
+        "ready_for_delivery": 50,
+        "in_delivery": 75,
+        "delivered": 100,
+        "cancelled": 0
+    }
+
+    return {
+        **summary,
+        "progress_percent": progress.get(order.status.value, 0),
+        "status_label": {
+            "pending": "En attente de confirmation",
+            "preparing": "En cours de préparation",
+            "ready_for_delivery": "Prête pour livraison",
+            "in_delivery": "En cours de livraison",
+            "delivered": "Livrée",
+            "cancelled": "Annulée"
+        }.get(order.status.value, "Inconnu")
+    }
+
+
+# ====================
+# ENDPOINTS POUR ADMIN/VENDEUR
+# ====================
+
+@app.get("/admin/orders")
+def get_admin_orders() -> dict:
+    """
+    Obtient toutes les commandes groupées par statut (pour le vendeur)
+    """
+    orders_by_status = {
+        "pending": [],
+        "preparing": [],
+        "ready_for_delivery": [],
+        "in_delivery": [],
+        "delivered": [],
+        "cancelled": []
+    }
+
+    for order in orders_db.values():
+        status = order.status.value
+        if status in orders_by_status:
+            orders_by_status[status].append(order.get_summary())
+
+    return {
+        "total_orders": len(orders_db),
+        "orders_by_status": orders_by_status
+    }
+
+
+@app.post("/admin/orders/{order_id}/start")
+def start_order_preparation(order_id: int) -> dict:
+    """
+    Marque le début de la préparation d'une commande
+    """
+    if order_id not in orders_db:
+        raise HTTPException(status_code=404, detail=f"Commande {order_id} non trouvée")
+
+    order = orders_db[order_id]
+
+    if order.status != OrderStatus.PENDING:
+        raise HTTPException(status_code=400, detail=f"Commande ne peut pas être préparée (statut actuel: {order.status.value})")
+
+    order.status = OrderStatus.PREPARING
+    order.started_at = datetime.now()
+
+    logger.info(f"Préparation commencée: ID={order_id}, Client={order.customer_name}")
+
+    return {
+        "message": f"Préparation de la commande {order_id} commencée",
+        "order": order.get_summary()
+    }
+
+
+@app.post("/admin/orders/{order_id}/ready")
+def mark_order_ready(order_id: int) -> dict:
+    """
+    Marque une commande comme prête pour livraison
+    """
+    if order_id not in orders_db:
+        raise HTTPException(status_code=404, detail=f"Commande {order_id} non trouvée")
+
+    order = orders_db[order_id]
+
+    if order.status != OrderStatus.PREPARING:
+        raise HTTPException(status_code=400, detail=f"Commande doit être en cours de préparation (statut actuel: {order.status.value})")
+
+    order.status = OrderStatus.READY_FOR_DELIVERY
+    order.ready_at = datetime.now()
+
+    logger.info(f"Commande prête pour livraison: ID={order_id}, Client={order.customer_name}")
+
+    return {
+        "message": f"Commande {order_id} est prête pour livraison",
+        "order": order.get_summary()
+    }
+
+
+@app.post("/admin/orders/{order_id}/deliver")
+def mark_order_in_delivery(order_id: int) -> dict:
+    """
+    Marque une commande comme en cours de livraison
+    """
+    if order_id not in orders_db:
+        raise HTTPException(status_code=404, detail=f"Commande {order_id} non trouvée")
+
+    order = orders_db[order_id]
+
+    if order.status != OrderStatus.READY_FOR_DELIVERY:
+        raise HTTPException(status_code=400, detail=f"Commande doit être prête (statut actuel: {order.status.value})")
+
+    order.status = OrderStatus.IN_DELIVERY
+
+    logger.info(f"Commande en cours de livraison: ID={order_id}, Client={order.customer_name}, Adresse={order.customer_address}")
+
+    return {
+        "message": f"Commande {order_id} est en cours de livraison",
+        "order": order.get_summary()
+    }
+
+
+@app.post("/admin/orders/{order_id}/delivered")
+def mark_order_delivered(order_id: int) -> dict:
+    """
+    Marque une commande comme livrée
+    """
+    if order_id not in orders_db:
+        raise HTTPException(status_code=404, detail=f"Commande {order_id} non trouvée")
+
+    order = orders_db[order_id]
+
+    if order.status != OrderStatus.IN_DELIVERY:
+        raise HTTPException(status_code=400, detail=f"Commande doit être en cours de livraison (statut actuel: {order.status.value})")
+
+    order.status = OrderStatus.DELIVERED
+    order.delivered_at = datetime.now()
+
+    logger.info(f"Commande livrée: ID={order_id}, Client={order.customer_name}")
+
+    return {
+        "message": f"Commande {order_id} a été livrée avec succès",
+        "order": order.get_summary()
     }
