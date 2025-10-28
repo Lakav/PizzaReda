@@ -1,0 +1,16 @@
+{
+  "customer_name": "Jean Dupont",
+  "pizzas": [
+    {
+      "name": "Margherita",
+      "size": "medium",
+      "toppings": []
+    }
+  ],
+  "customer_address": {
+    "street_number": "123",
+    "street": "Rue de Paris",
+    "city": "Paris",
+    "postal_code": "31000"
+  }
+}
