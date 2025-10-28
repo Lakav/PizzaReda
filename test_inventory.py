@@ -19,53 +19,73 @@ def reset_database_and_inventory():
 client = TestClient(app)
 
 
+def get_ingredients_dict(inventory_response):
+    """
+    Convertit la réponse d'inventaire en dict simple pour faciliter l'accès aux quantités
+    Format: {"pate": 200, "tomate": 100, ...}
+    """
+    data = inventory_response.json()
+    result = {}
+
+    # Ajouter les ingrédients de base
+    for item in data.get("base_ingredients", []):
+        result[item["name"]] = item["quantity"]
+
+    # Ajouter les toppings
+    for item in data.get("toppings", []):
+        result[item["name"]] = item["quantity"]
+
+    return result
+
+
 class TestInventoryEndpoints:
     """Tests pour les endpoints d'inventaire"""
 
-    def test_get_inventory_summary(self):
-        """Test de récupération du résumé d'inventaire"""
+    def test_get_full_inventory(self):
+        """Test de récupération de l'inventaire complet"""
         response = client.get("/inventory")
         assert response.status_code == 200
         data = response.json()
 
-        assert "ingredients" in data
-        assert "total_stock" in data
-        assert "ingredients_count" in data
+        assert "base_ingredients" in data
+        assert "toppings" in data
+        assert "total_quantity" in data
 
-    def test_get_ingredients_inventory(self):
-        """Test de récupération du stock des ingrédients"""
-        response = client.get("/inventory/ingredients")
+        # Vérifier la structure des base_ingredients
+        for item in data["base_ingredients"]:
+            assert "name" in item
+            assert "quantity" in item
+            assert "is_base_ingredient" in item
+            assert item["is_base_ingredient"] is True
+
+        # Vérifier la structure des toppings
+        for item in data["toppings"]:
+            assert "name" in item
+            assert "quantity" in item
+            assert "is_base_ingredient" in item
+            assert item["is_base_ingredient"] is False
+
+    def test_get_toppings_menu(self):
+        """Test de l'endpoint /topping/menu"""
+        response = client.get("/topping/menu")
         assert response.status_code == 200
         data = response.json()
 
         assert isinstance(data, list)
         assert len(data) > 0
 
-        # Vérifier que la pâte est présente
-        ingredient_names = [ing["name"] for ing in data]
-        assert "pate" in ingredient_names
+        # Vérifier les toppings attendus
+        topping_names = [t["name"] for t in data]
+        assert "pate" in topping_names
+        assert "tomate" in topping_names
+        assert "mozzarella" in topping_names
+        assert "basilic" in topping_names
 
         # Vérifier la structure
-        for ingredient in data:
-            assert "name" in ingredient
-            assert "stock" in ingredient
-            assert ingredient["stock"] >= 0
-
-    def test_get_ingredients_menu(self):
-        """Test de l'endpoint /ingredients/menu"""
-        response = client.get("/ingredients/menu")
-        assert response.status_code == 200
-        data = response.json()
-
-        assert isinstance(data, list)
-        assert len(data) > 0
-
-        # Vérifier les ingrédients attendus
-        ingredient_names = [ing["name"] for ing in data]
-        assert "pate" in ingredient_names
-        assert "tomate" in ingredient_names
-        assert "mozzarella" in ingredient_names
-        assert "basilic" in ingredient_names
+        for topping in data:
+            assert "name" in topping
+            assert "price" in topping
+            assert topping["price"] == 1.0  # Tous les toppings coûtent 1€
 
     def test_add_ingredient_stock_success(self):
         """Test d'ajout de stock pour un ingrédient"""
@@ -73,12 +93,9 @@ class TestInventoryEndpoints:
         quantity = 10
 
         # Récupérer le stock initial
-        initial_response = client.get("/inventory/ingredients")
-        initial_stock = None
-        for ing in initial_response.json():
-            if ing["name"].lower() == ingredient_name.lower():
-                initial_stock = ing["stock"]
-                break
+        initial_response = client.get("/inventory")
+        ingredients_initial = get_ingredients_dict(initial_response)
+        initial_stock = ingredients_initial[ingredient_name]
 
         # Ajouter du stock
         response = client.post(f"/inventory/ingredients/{ingredient_name}/add?quantity={quantity}")
@@ -110,8 +127,7 @@ class TestInventoryManagement:
         """Test que Margherita consomme: pâte, tomate, mozzarella, basilic"""
         # Récupérer le stock initial
         initial_response = client.get("/inventory")
-        initial_data = initial_response.json()
-        ingredients_initial = initial_data["ingredients"]
+        ingredients_initial = get_ingredients_dict(initial_response)
 
         # Créer une commande de Margherita
         order_data = {
@@ -135,8 +151,7 @@ class TestInventoryManagement:
 
         # Vérifier que le stock a été décrémenté correctement
         final_response = client.get("/inventory")
-        final_data = final_response.json()
-        ingredients_final = final_data["ingredients"]
+        ingredients_final = get_ingredients_dict(final_response)
 
         # Pâte doit diminuer de 1
         assert ingredients_final["pate"] == ingredients_initial["pate"] - 1
@@ -150,8 +165,7 @@ class TestInventoryManagement:
     def test_reine_consumes_correct_ingredients(self):
         """Test que Reine consomme: pâte, tomate, mozzarella, jambon, champignons"""
         initial_response = client.get("/inventory")
-        initial_data = initial_response.json()
-        ingredients_initial = initial_data["ingredients"]
+        ingredients_initial = get_ingredients_dict(initial_response)
 
         # Créer une commande de Reine
         order_data = {
@@ -174,8 +188,7 @@ class TestInventoryManagement:
 
         # Vérifier
         final_response = client.get("/inventory")
-        final_data = final_response.json()
-        ingredients_final = final_data["ingredients"]
+        ingredients_final = get_ingredients_dict(final_response)
 
         assert ingredients_final["pate"] == ingredients_initial["pate"] - 1
         assert ingredients_final["tomate"] == ingredients_initial["tomate"] - 1
@@ -238,8 +251,8 @@ class TestInventoryManagement:
     def test_multiple_orders_reduce_stock_correctly(self):
         """Test que le stock est réduit correctement pour plusieurs commandes"""
         initial_response = client.get("/inventory")
-        initial_data = initial_response.json()
-        initial_pate = initial_data["ingredients"]["pate"]
+        ingredients_initial = get_ingredients_dict(initial_response)
+        initial_pate = ingredients_initial["pate"]
 
         # Créer 3 commandes de Margherita
         for i in range(3):
@@ -264,15 +277,14 @@ class TestInventoryManagement:
 
         # Vérifier que la pâte a diminué de 3
         final_response = client.get("/inventory")
-        final_data = final_response.json()
-        final_pate = final_data["ingredients"]["pate"]
+        ingredients_final = get_ingredients_dict(final_response)
+        final_pate = ingredients_final["pate"]
         assert final_pate == initial_pate - 3
 
     def test_multiple_pizzas_in_one_order(self):
         """Test qu'une commande avec plusieurs pizzas différentes décompte les bons ingrédients"""
         initial_response = client.get("/inventory")
-        initial_data = initial_response.json()
-        ingredients_initial = initial_data["ingredients"]
+        ingredients_initial = get_ingredients_dict(initial_response)
 
         # Commande: 1 Margherita + 1 Reine
         order_data = {
@@ -300,8 +312,7 @@ class TestInventoryManagement:
 
         # Vérifier
         final_response = client.get("/inventory")
-        final_data = final_response.json()
-        ingredients_final = final_data["ingredients"]
+        ingredients_final = get_ingredients_dict(final_response)
 
         # 2 pâtes (une pour chaque pizza)
         assert ingredients_final["pate"] == ingredients_initial["pate"] - 2
@@ -319,8 +330,7 @@ class TestInventoryManagement:
     def test_custom_toppings_deduction(self):
         """Test que les toppings personnalisés (non dans la recette de base) sont aussi déduits"""
         initial_response = client.get("/inventory")
-        initial_data = initial_response.json()
-        ingredients_initial = initial_data["ingredients"]
+        ingredients_initial = get_ingredients_dict(initial_response)
 
         # Margherita + bacon (ingrédient supplémentaire)
         order_data = {
@@ -343,8 +353,7 @@ class TestInventoryManagement:
 
         # Vérifier
         final_response = client.get("/inventory")
-        final_data = final_response.json()
-        ingredients_final = final_data["ingredients"]
+        ingredients_final = get_ingredients_dict(final_response)
 
         # Bacon doit aussi avoir diminué
         assert ingredients_final["bacon"] == ingredients_initial["bacon"] - 1

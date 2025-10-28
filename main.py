@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
 from typing import List, Dict
-from models import Pizza, PizzaCreate, Order, OrderCreate, Price, Address, InventoryManager, Topping
+from models import Pizza, PizzaCreate, Order, OrderCreate, Price, Address, InventoryManager, Topping, Ingredient
 from pydantic import ValidationError
 
 app = FastAPI(
@@ -25,14 +25,13 @@ def read_root():
         "endpoints": {
             "GET /": "Cette page",
             "GET /pizzas/menu": "Voir le menu des pizzas disponibles",
-            "GET /ingredients/menu": "Voir tous les ingrédients disponibles avec leur stock",
+            "GET /topping/menu": "Voir les toppings disponibles avec prix",
             "POST /orders": "Créer une nouvelle commande",
             "GET /orders/{order_id}": "Voir les détails d'une commande",
             "GET /orders": "Voir toutes les commandes",
             "DELETE /orders/{order_id}": "Annuler une commande",
-            "GET /inventory": "Voir l'état complet de l'inventaire",
-            "GET /inventory/ingredients": "Voir le stock de tous les ingrédients",
-            "POST /inventory/ingredients/{ingredient_name}/add": "Ajouter du stock d'un ingrédient",
+            "GET /inventory": "Voir tout l'inventaire (ingrédients de base et toppings) avec quantités",
+            "POST /inventory/ingredients/{ingredient_name}/add": "Ajouter du stock à un ingrédient",
             "GET /pricing/info": "Informations sur la tarification"
         }
     }
@@ -53,10 +52,10 @@ def get_menu() -> List[Pizza]:
     return [Pizza.from_create(pizza) for pizza in menu_data]
 
 
-@app.get("/ingredients/menu")
-def get_ingredients_menu() -> List[Topping]:
-    """Retourne la liste de tous les ingrédients disponibles avec leur stock"""
-    return inventory.get_all_ingredients()
+@app.get("/topping/menu")
+def get_toppings_menu() -> List[Topping]:
+    """Retourne la liste de tous les toppings disponibles avec leur prix (+1€)"""
+    return inventory.get_all_toppings()
 
 
 @app.get("/pricing/info")
@@ -164,14 +163,24 @@ def cancel_order(order_id: int) -> dict:
 
 @app.get("/inventory")
 def get_inventory() -> dict:
-    """Retourne l'état complet de l'inventaire des ingrédients"""
-    return inventory.get_inventory_summary()
+    """
+    Retourne l'inventaire complet avec tous les ingrédients de base et toppings avec leurs quantités.
 
-
-@app.get("/inventory/ingredients")
-def get_ingredients_inventory() -> List[Topping]:
-    """Retourne le stock actuel de tous les ingrédients"""
-    return inventory.get_all_ingredients()
+    Format:
+    {
+        "base_ingredients": [
+            {"name": "pate", "quantity": 200, "is_base_ingredient": true},
+            ...
+        ],
+        "toppings": [
+            {"name": "tomate", "quantity": 100, "is_base_ingredient": false},
+            {"name": "mozzarella", "quantity": 100, "is_base_ingredient": false},
+            ...
+        ],
+        "total_quantity": 1100
+    }
+    """
+    return inventory.get_full_inventory()
 
 
 @app.post("/inventory/ingredients/{ingredient_name}/add")

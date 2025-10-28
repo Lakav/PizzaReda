@@ -276,21 +276,23 @@ class Order(BaseModel):
 # ====================
 
 class Topping(BaseModel):
-    """Classe représentant un topping disponible avec son stock"""
+    """Classe représentant un topping disponible avec son prix"""
     name: str = Field(..., description="Nom du topping")
-    stock: int = Field(..., ge=0, description="Quantité en stock")
+    price: float = Field(1.0, description="Prix du topping supplémentaire")
 
     def __str__(self) -> str:
-        return f"{self.name} (stock: {self.stock})"
+        return f"{self.name} (+{self.price}€)"
 
 
-class PizzaInventory(BaseModel):
-    """Classe représentant l'inventaire d'une pizza"""
-    name: str = Field(..., description="Nom de la pizza")
-    stock: int = Field(..., ge=0, description="Quantité en stock")
+class Ingredient(BaseModel):
+    """Classe représentant un ingrédient en stock"""
+    name: str = Field(..., description="Nom de l'ingrédient")
+    quantity: int = Field(..., ge=0, description="Quantité en stock")
+    is_base_ingredient: bool = Field(False, description="True si c'est un ingrédient de base (pâte, etc.)")
 
     def __str__(self) -> str:
-        return f"{self.name} (stock: {self.stock})"
+        ingredient_type = "Base" if self.is_base_ingredient else "Topping"
+        return f"{self.name}: {self.quantity} ({ingredient_type})"
 
 
 class InventoryManager:
@@ -370,17 +372,45 @@ class InventoryManager:
         self.ingredients[ingredient_name_lower] += quantity
         return True
 
-    def get_all_ingredients(self) -> List[Topping]:
-        """Retourne la liste de tous les ingrédients disponibles"""
+    def get_all_toppings(self) -> List[Topping]:
+        """Retourne la liste de tous les toppings disponibles avec leur prix (+1€)"""
+        # Les toppings ont tous le même prix: 1€ supplémentaire
         return [
-            Topping(name=name, stock=stock)
-            for name, stock in sorted(self.ingredients.items())
+            Topping(name=name, price=1.0)
+            for name in sorted(self.ingredients.keys())
         ]
 
-    def get_inventory_summary(self) -> dict:
-        """Retourne un résumé complet de l'inventaire"""
+    def get_full_inventory(self) -> dict:
+        """
+        Retourne l'inventaire complet avec tous les ingrédients et toppings
+        Format: {
+            "base_ingredients": [...],
+            "toppings": [...],
+            "total_quantity": int
+        }
+        """
+        base_ingredients = ["pate"]  # Ingrédients considérés comme "base"
+
+        base_items = []
+        topping_items = []
+
+        for name in sorted(self.ingredients.keys()):
+            quantity = self.ingredients[name]
+            is_base = name in base_ingredients
+
+            item = Ingredient(
+                name=name,
+                quantity=quantity,
+                is_base_ingredient=is_base
+            )
+
+            if is_base:
+                base_items.append(item)
+            else:
+                topping_items.append(item)
+
         return {
-            "ingredients": {name: stock for name, stock in sorted(self.ingredients.items())},
-            "total_stock": sum(self.ingredients.values()),
-            "ingredients_count": len(self.ingredients),
+            "base_ingredients": base_items,
+            "toppings": topping_items,
+            "total_quantity": sum(self.ingredients.values())
         }
